@@ -1,0 +1,141 @@
+---
+title: "COVID Modeling Project"
+author: "Trust Okorie"
+date: "6/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+s <- c(200)
+i <- c(1)
+r <- c(0)
+N <- 201
+beta <- .4
+gamma <- .2
+
+## S -> I -> R
+for (t in 2:100){
+  new_infs <- beta * i[t-1] * s[t-1]/ N
+  new_recover <- gamma * i[t-1] 
+  s[t] <- s[t-1] - new_infs
+  i[t] <- i[t-1]  + new_infs  - new_recover
+  r[t] <- r[t-1] + new_recover
+}
+```
+
+```{r}
+plot_data <- data.frame(i=i,s=s,r=r,t=1:100)
+ggplot(plot_data,aes(x=t,y=i)) + geom_line(color='red') +
+  geom_line(aes(x=t,y=s),color='blue')+  geom_line(aes(x=t,y=r),color='green')
+```
+
+```{r}
+# Agent Based Modeling
+
+# Set number of agents and create agent dataframe
+# Create variables for infection chance (beta) and recovery chance (gamma)
+n_agents <- 100
+beta = .4 * .01
+gamma = .2 * .01
+agents <- data.frame("Agent" = 1:n_agents, "State" = "S", "TimePrimaryInfection" = NA, 
+                     "TimeSecondaryInfection" = NA, "InfectionChance" = beta, "RecoveryChance" = gamma)
+
+# Patient Zero
+agents[1,]$State = "I"
+agents[1,]$TimePrimaryInfection = 1
+
+# Function that iterates through agent data frame and infects agents based on infection chance
+agents.infect <- function(agents, t){
+  for (i in 1:nrow(agents)){
+    if (agents[i,]$State == "I"){
+       for (j in 1:nrow(agents)){
+         if (agents[j,]$State == "S"){
+           # Is ContactChance greater than or less than beta?
+           if (agents[i,]$InfectionChance > runif(1,0,1)){
+             agents[j,]$State = "I"
+             # If agent is infected, record the time of this infection and assign it to 
+             # the primary infection variable
+             agents[j,]$TimePrimaryInfection = t
+             # If an agent is infected by another agent, record the time of this secondary infection and assign
+             # it to the secondary infection variable
+             agents[i,]$TimeSecondaryInfection = t - agents[i,]$TimePrimaryInfection
+          }
+        }
+      }
+    }
+  }
+  return(agents)
+}
+
+# Function that iterates through agent data frame and recovers infected agents based on recovery chance
+agents.recover <- function(agents){
+  for (i in 1:nrow(agents)){
+    if (agents[i,]$State == "I"){
+       # Is RecoveryChance greater than or less than gamma?
+       if(agents[i,]$RecoveryChance > runif(1,0,1)){
+         agents[i,]$State = "R"
+       }
+    }
+  }
+  return(agents)
+}
+
+# Function that simulates the infection and recovery of agents throughout time
+agents.simulate <- function(agents){
+  I <- c(1)
+  for (t in 1:100){
+    agents <- agents.infect(agents, t)
+    agents <- agents.recover(agents)
+    I <- c(I, nrow(agents[agents$State=="I",]))
+  }
+  return_list <- list()
+  return_list[[1]] <- agents
+  return_list[[2]] <- I
+  return(return_list)
+}
+
+# Run all functions and simulate movement of agents
+# Assign simulated values to variables in data frame
+return_list <- agents.simulate(agents)
+agents <- return_list[[1]]
+I <- return_list[[2]]
+
+# Include Time variable
+# Figure out way to keep track of primary and secondary infection times
+# Add times to the data frame
+
+# We want empirical mean to equal 1/gamma ex. 1/.33 = 33
+# A matter of math behind our model than the model itself
+# Generation interval is distribution of time to recovery
+# Our stochastic implementation violates this assumption (there is a constant rate of secondary infection contacts)
+```
+
+```{r}
+# Contact Network Structure - Adjacency Matrix
+# Tip: start with "random graph", connections between people with random probability p
+# If p = 1, connect two people, if p = 0, they do not connect
+
+# Matrix ith row and jth column should have 1 if person i is connected to person j
+network_matrix <- matrix(0, 100, 100)
+```
+
+```{r}
+plot(I)
+```
+
+```{r}
+hist(agents$TimeSecondaryInfection)
+mean(agents$TimeSecondaryInfection, na.rm = TRUE)
+var(agents$TimeSecondaryInfection, na.rm = TRUE)
+```
+
+
+
