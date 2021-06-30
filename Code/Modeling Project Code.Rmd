@@ -14,30 +14,6 @@ library(ggplot2)
 ```
 
 ```{r}
-s <- c(200)
-i <- c(1)
-r <- c(0)
-N <- 201
-beta <- .4
-gamma <- .2
-
-## S -> I -> R
-for (t in 2:100){
-  new_infs <- beta * i[t-1] * s[t-1]/ N
-  new_recover <- gamma * i[t-1] 
-  s[t] <- s[t-1] - new_infs
-  i[t] <- i[t-1]  + new_infs  - new_recover
-  r[t] <- r[t-1] + new_recover
-}
-```
-
-```{r}
-plot_data <- data.frame(i=i,s=s,r=r,t=1:100)
-ggplot(plot_data,aes(x=t,y=i)) + geom_line(color='red') +
-  geom_line(aes(x=t,y=s),color='blue')+  geom_line(aes(x=t,y=r),color='green')
-```
-
-```{r}
 # Agent Based Modeling
 
 # Set number of agents and create agent dataframe
