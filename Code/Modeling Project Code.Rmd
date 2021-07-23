@@ -274,7 +274,7 @@ matrix_gen_int_mean <- mean(matrix_gen_interval)
 ```
 
 
-#### 
+#### Function to Simulate Faster
 
 
 ```{r}
