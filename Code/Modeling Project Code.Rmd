@@ -9,28 +9,13 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Overview
+```{r}
+library(igraph)
+```
 
-We use the individual based representation of the Susceptible-Infected-Recovered (SIR) model to create a distribution of generation intervals. We then look at what effects including a contact network may have on the shape of the distribution.
-
-## Generation Interval Histogram
-
-The National Library of Medicine defines the generation interval as the time between the infection time of an individual, and the infection time of the person who infected them. A generation interval histogram visualizes the number of people who belong to a certain interval bin.
-
-## SIR Model and Contact Network
-
-The SIR model is helpful in predicting and modeling the trajectory of infectious diseases. However, it may oversimplify certain factors like the movement of people in reality compared to the simplifying “homogenous mixing” (uniform contact) assumption made by the SIR model. Explicitly modeling the underlying contact structure may be helpful in creating a model that better represents the movement of people in the real world. Agent Based Modeling can simulate this more realistic movement. Understanding the effect of contact networks on the generation interval will help epidemiologists gain a better real-time understanding of disease progression.
-
-## Methods
-
-We use R to create agent based models that simulate the movement of people. To do this we have created functions that model infection and recovery of agents in a population. We then use a matrix to act as a contact network for agents in the model. We record the time agents took to infect others to create generation intervals that we can then visualize and compare. We do the same for the time it took for infected agents to recover, and see that the distribution of recovery time is similar to that of infection time.
-
-
-## Code
 
 #### Agent Based Model
 
-Creating an agent based model is our first step in modeling more realistic behavior of infectious disease within a population. 
 
 ```{r}
 # Agent Based Modeling
@@ -50,11 +35,15 @@ agents <- data.frame("Agent" = 1:n_agents, "State" = "S", "TimeOfPrimaryInfectio
 agents[1,]$State = "I"
 agents[1,]$TimeOfPrimaryInfection = 1
 
+
 # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2365921/
 # Generation Interval contracts as number of susceptibles decreases
 # We are using the first agent and simulating infection some number of times 
 # Each agent has a uniform distribution 
 # Function that iterates through agent data frame and infects agents based on infection chance
+
+abm_gen_int_list <- list()
+
 agents.infect <- function(agents, t){
   for (i in 1:nrow(agents)){
     if (agents[i,]$State == "I"){
@@ -75,7 +64,6 @@ agents.infect <- function(agents, t){
             # Keep track of every infection event (generation interval)
             # num_elements tells us how many elements in the list (number of samples from generation intervals)
             # Adding a new sample from generation interval
-            
             # Can we store the generation 
             abm_gen_int_list[[length(abm_gen_int_list) + 1]] <<- (t - agents[i,]$TimeOfPrimaryInfection)
           }
@@ -87,6 +75,9 @@ agents.infect <- function(agents, t){
 }
 
 # Function that iterates through agent data frame and recovers infected agents based on recovery chance
+# abm_recovery_dist <- list()
+recovery_dist <- list()
+
 agents.recover <- function(agents, t){
   for (i in 1:nrow(agents)){
     if (agents[i,]$State == "I"){
@@ -117,8 +108,7 @@ agents.simulate <- function(agents){
 # Run all functions and simulate movement of agents
 # Assign simulated values to variables in data frame
 
-recovery_dist <- list()
-abm_gen_int_list <- list()
+
 
 # Try a much smaller range for nsim
 for (nsim in 1:250){
@@ -143,12 +133,15 @@ for (nsim in 1:250){
 # Find way to keep rate of infection constant
 plot(I)
 abm_gen_interval <- unlist(abm_gen_int_list)
-abm_gen_int_hist <- hist(abm_gen_interval, main = "Distribution of Generation Intervals (Agent Based Modeling)", xlab = "Time Units")
+hist(abm_gen_interval, main = "Distribution of Generation Intervals (Agent Based Modeling)", xlab = "Time Units")
+
+
 
 # Time to recovery distribution is the same because each individual has their own rate of recovery
 # Simulated multiple times gives us more variance
 abm_recovery_int <- unlist(recovery_dist)
-abm_recovery_hist(recovery_int, main = "Distribution of Recovery Time (Agent Based Modeling)", xlab = "Time Units")
+hist(abm_recovery_int, main = "Distribution of Recovery Time (Agent Based Modeling)", xlab = "Time Units")
+
 
 # We want mean generation interval to be close to 1/gamma becasue gamma determines time until recovery
 # This means the generation interval distribution is equivalent to time to recovery
@@ -158,7 +151,6 @@ abm_gen_int_mean <- mean(abm_gen_interval)
 
 #### Contact Network Structure
 
-Once we created our agent based model, we added an underlying contact network structure through the use of an adjacency matrix which acts as an environment for agents. In this environment, agents only infect others they are connected to by adjacency. 
 
 ```{r}
 # Contact Network Structure - Adjacency Matrix
@@ -174,12 +166,30 @@ Once we created our agent based model, we added an underlying contact network st
 # Make contact network symmetric
 # Define certain percentage of connections
 
+# Construct degree sequence
+# Change probability of connections for diffferent people
+# binom function means the probability of connections stay the same between all people, which is not realistic
+# We need to use Poisson or exponential graph
+
+
+# This creates 100 degrees
+degs <- sample(1:100, 100, replace=TRUE, prob=exp(-0.5*(1:100)))
+# Adjustment in case values don't allow for graph
+if (sum(degs) %% 2 != 0) { degs[1] <- degs[1] + 1 }
+# Constructing graph from degree sequence
+g4 <- sample_degseq(degs, method="vl")
+all(degree(g4) == degs)
+
+network_matrix <- matrix(as_adjacency_matrix(g4, sparse = FALSE), n_agents, n_agents)
+
+# Run different number of simulations (250, 500, 1000, etc.) multiple times and compare means
+
+
 n_agents <- 100
 beta = 1.5 * .1
 gamma = .8 * .1
 
-#
-network_matrix <- matrix(rbinom(n_agents*n_agents,1,0.7), n_agents, n_agents)
+# network_matrix <- matrix(rbinom(n_agents*n_agents,1,0.7), n_agents, n_agents)
 agents <- data.frame("Agent" = 1:n_agents, "State" = "S", "TimeOfPrimaryInfection" = NA, 
                      "TimeToSecondaryInfection" = NA, "InfectionChance" = beta, "RecoveryChance" = gamma)
 
@@ -194,9 +204,9 @@ matrix.infect <- function(agents, network_matrix, t){
             if (agents[j,]$State == "S"){
               # Is InfectionChance greater than or less than beta?
               # If agent at i is connected to agent at j, continue infect function
-              
               # We can match beta with beta from non contact network by multiplying the non contact network
-              # beta by the probability that indices in the network matrix are 1 (in this case 0.7, from the rbinom function)
+              # beta by the probability that indices in the network matrix are 1 
+              # (in this case 0.7, from the rbinom function)
               if (beta > runif(1,0,1) && network_matrix[i,j] == 1){
                 agents[j,]$TimeOfPrimaryInfection = t
                 matrix_gen_int_list[[length(matrix_gen_int_list) + 1]] <<- (t - agents[i,]$TimeOfPrimaryInfection)
@@ -240,6 +250,7 @@ matrix.simulate <- function(agents){
   return(return_list)
 }
 
+
 matrix_recovery_dist <- list()
 matrix_gen_int_list <- list()
 for (nsim in 1:250){
@@ -254,25 +265,107 @@ for (nsim in 1:250){
 
 plot(I)
 matrix_gen_interval <- unlist(matrix_gen_int_list)
-matrix_int_hist <- hist(matrix_gen_interval, main = "Distribution of Generation Intervals (Contact Network)", xlab = "Time Units")
+hist(matrix_gen_interval, main = "Distribution of Generation Intervals (Contact Network)", xlab = "Time Units")
 
 matrix_recovery_int <- unlist(recovery_dist)
-matrix_recovery_hist(recovery_int, main = "Distribution of Recovery Time (Contact Network)", xlab = "Time Units")
+hist(matrix_recovery_int, main = "Distribution of Recovery Time (Contact Network)", xlab = "Time Units")
 
-matrix_int_mean <- mean(matrix_gen_interval)
+matrix_gen_int_mean <- mean(matrix_gen_interval)
 ```
 
-```{r}
-# Construct degree sequence
-# Change probability of connections for diffferent people
-# binom function means the probability of connections stay the same between all people, which is not realistic
-# We need to use Poisson or exponential graph
 
-# This creates 100 degrees
-degs <- sample(1:100, 100, replace=TRUE, prob=exp(-0.5*(1:100)))
-# Adjustment in case values don't allow for graph
-if (sum(degs) %% 2 != 0) { degs[1] <- degs[1] + 1 }
-# Constructing graph from degree sequence
-g4 <- sample_degseq(degs, method="vl")
-all(degree(g4) == degs)
+#### 
+
+
+```{r}
+simulate_single_generation_interval_fast <- function(network_probability,total_sims){
+  # This creates n_agents (in this case 100) degrees
+  degs <- sample(1:n_agents, n_agents, replace=TRUE, prob=exp(-network_probability*(1:n_agents)))
+  # Adjustment in case values don't allow for graph
+  if (sum(degs) %% 2 != 0) { degs[1] <- degs[1] + 1 }
+  # Constructing graph from degree sequence
+  g4 <- sample_degseq(degs, method="simple")
+  all(degree(g4) == degs)
+    
+  network_matrix <- matrix(as_adjacency_matrix(g4, sparse = FALSE), n_agents, n_agents)
+
+  n_agents <- 100
+  beta = 1.5 * .1
+  gamma = .8 * .1
+  
+  # network_matrix <- matrix(rbinom(n_agents*n_agents,1,0.7), n_agents, n_agents)
+  agents <- data.frame("Agent" = 1:n_agents, "State" = "S", "TimeOfPrimaryInfection" = NA, 
+                       "TimeToSecondaryInfection" = NA, "InfectionChance" = beta, "RecoveryChance" = gamma)
+  
+  # Patient Zero
+  agents[1,]$State = "I"
+  agents[1,]$TimeOfPrimaryInfection = 1
+  
+  matrix.infect <- function(agents, network_matrix, t){
+      if (agents[1,]$State=="I"){
+          for (j in 1:nrow(agents)){
+              if (agents[j,]$State == "S"){
+                # Is InfectionChance greater than or less than beta?
+                # If agent at i is connected to agent at j, continue infect function
+                # We can match beta with beta from non contact network by multiplying the non contact network
+                # beta by the probability that indices in the network matrix are 1 
+                # (in this case 0.7, from the rbinom function)
+                if (beta > runif(1,0,1) && network_matrix[1,j] == 1){
+                  agents[j,]$TimeOfPrimaryInfection = t
+                  matrix_gen_int_list[[length(matrix_gen_int_list) + 1]] <<- (t - agents[1,]$TimeOfPrimaryInfection)
+                }
+              }
+            }
+      }
+        
+    return(agents)
+  }
+  
+  recovery_dist <- list()
+  matrix_gen_int_list <- list()
+  matrix.recover <- function(agents, network_matrix, t){
+      if (agents[1,]$State == "I"){
+        # Is RecoveryChance greater than or less than gamma?
+        if(gamma > runif(1,0,1)){
+          agents[1,]$State = "R"
+          recovery_dist[[length(recovery_dist) + 1]] <<- (t) 
+        }
+      }
+    
+    return(agents)
+  }
+  
+  # When a simulation is run, we look at the spread of infection from one single agent
+  # A single agent infects others at a constant rate, the distribution of infection time is uniform
+  # Some agents may recover depneding on RecoveryChance
+  # That distribution may look different if the model is simulated several times
+  # The spread of infection from one agent is simulated t times
+  
+  matrix.simulate <- function(agents) {
+    for (t in 1:100) {
+      agents <- matrix.infect(agents, network_matrix, t)
+      agents <- matrix.recover(agents, network_matrix, t)
+    }
+  }
+  
+  
+  matrix_recovery_dist <- list()
+  matrix_gen_int_list <- list()
+  for (nsim in 1:total_sims) {
+    agents <-
+      data.frame(
+        "Agent" = 1:n_agents,
+        "State" = "S",
+        "TimeOfPrimaryInfection" = NA
+      )
+    # Patient Zero
+    agents[1, ]$State = "I"
+    agents[1, ]$TimeOfPrimaryInfection = 1
+    matrix.simulate(agents)
+  }
+  
+  return (mean(unlist(matrix_gen_int_list)))
+}
+
+simulate_single_generation_interval_fast(network_probability=exp(-0.5*(1:100)), total_sims=250)
 ```
